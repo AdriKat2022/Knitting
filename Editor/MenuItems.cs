@@ -1,18 +1,21 @@
-using UnityEngine;
 using UnityEditor;
+using UnityEngine;
 
-public static class MenuItems
+namespace Knitting
 {
-    [MenuItem("GameObject/Knitting/StoryManager")]
-    static void CreateStory(MenuCommand menuCommand)
+    public static class MenuItems
     {
-        GameObject go = new GameObject("StoryManager");
-        go.AddComponent<Story>();
+        [MenuItem("GameObject/Knitting/StoryManager")]
+        static void CreateStory(MenuCommand menuCommand)
+        {
+            GameObject go = new GameObject("StoryManager");
+            go.AddComponent<Story>();
 
-        // Ensure it gets reparented if this was a context click (otherwise does nothing)
-        GameObjectUtility.SetParentAndAlign(go, menuCommand.context as GameObject);
-        // Register the creation in the undo system
-        Undo.RegisterCreatedObjectUndo(go, "Create " + go.name);
-        Selection.activeObject = go;
+            // Ensure it gets reparented if this was a context click (otherwise does nothing)
+            GameObjectUtility.SetParentAndAlign(go, menuCommand.context as GameObject);
+            // Register the creation in the undo system
+            Undo.RegisterCreatedObjectUndo(go, "Create " + go.name);
+            Selection.activeObject = go;
+        }
     }
 }

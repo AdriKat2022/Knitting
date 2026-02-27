@@ -1,233 +1,233 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Assertions;
 
-public static class ParsingTools
+namespace Knitting
 {
-    public class ParsingResult
+    public static class ParsingTools
     {
-        public Dictionary<string, string> Groups = new Dictionary<string, string>();
-        public string Value;
-        public bool succes = false;
-
-        public int startIndex;
-        public int endIndex;
-
-        override public bool Equals(object _other)
+        public class ParsingResult
         {
-            if(_other.GetType() != typeof(ParsingResult)) return false;
-            ParsingResult other = (ParsingResult)_other;
-            if (this.Value != other.Value) return false;
-            if (this.Groups.Count != other.Groups.Count) return false;
-            foreach (KeyValuePair<string, string> pair in this.Groups) 
+            public Dictionary<string, string> Groups = new();
+            public string Value;
+            public bool Success;
+
+            public int StartIndex;
+            public int EndIndex;
+
+            public override bool Equals(object other)
             {
-                string value;
-                if(!other.Groups.TryGetValue(pair.Key, out value)) return false;
-                if (value != pair.Value) return false;
+                if(other.GetType() != typeof(ParsingResult)) return false;
+                ParsingResult otherParsingResult = (ParsingResult)other;
+                if (this.Value != otherParsingResult.Value) return false;
+                if (this.Groups.Count != otherParsingResult.Groups.Count) return false;
+                foreach (KeyValuePair<string, string> pair in this.Groups) 
+                {
+                    string value;
+                    if(!otherParsingResult.Groups.TryGetValue(pair.Key, out value)) return false;
+                    if (value != pair.Value) return false;
+                }
+                if (this.Success != otherParsingResult.Success) return false;
+                return true;
             }
-            if (this.succes != other.succes) return false;
-            return true;
+
+            public override int GetHashCode()
+            {
+                return HashCode.Combine(Groups, Value, Success);
+            }
+
+            public override string ToString() {  return Value; }
         }
 
-        public override int GetHashCode()
+        public static int FindInWord(string text, char separator, int offset = 0, int toIgnore = 0)
         {
-            return HashCode.Combine(Groups, Value, succes);
+            bool isInGuillemet = false;
+            bool isInApostrophe = false;
+            bool skipnext = false;
+
+            for (int i = offset; i < text.Length; i++)
+            {
+                if (!isInApostrophe && !isInGuillemet && text[i] == separator) if (toIgnore == 0) return i; else toIgnore--;
+                if (!skipnext && !isInGuillemet && text[i] == '\'') isInApostrophe = !isInApostrophe;
+                if (!skipnext && !isInApostrophe && text[i] == '"') isInGuillemet = !isInGuillemet;
+            }
+
+            return -1;
         }
 
-        override public string ToString() {  return Value; }
-    }
-
-    static public int FindInWord(string text, char separator, int offset = 0, int toIgnore = 0)
-    {
-        bool isInGuillemet = false;
-        bool isInApostrophe = false;
-        bool skipnext = false;
-
-        for (int i = offset; i < text.Length; i++)
+        public static List<string> CarefullSplit(string text, char separator, int offset = 0)
         {
-            if (!isInApostrophe && !isInGuillemet && text[i] == separator) if (toIgnore == 0) return i; else toIgnore--;
-            if (!skipnext && !isInGuillemet && text[i] == '\'') isInApostrophe = !isInApostrophe;
-            if (!skipnext && !isInApostrophe && text[i] == '"') isInGuillemet = !isInGuillemet;
+            List<string> splited = new List<string>();
+
+            int index = FindInWord(text, separator, offset);
+            while (index != -1)
+            {
+                splited.Add(text.Substring(offset,index - offset));
+                offset = index + 1;
+                index = FindInWord(text, separator, offset);
+            }
+
+            if (offset < text.Length) splited.Add(text.Substring(offset, text.Length - offset));
+            else if (offset == text.Length) splited.Add("");
+
+            return splited;
         }
 
-        return -1;
-    }
-
-    static public List<string> CarefullSplit(string text, char separator, int offset = 0)
-    {
-        List<string> splited = new List<string>();
-
-        int index = FindInWord(text, separator, offset);
-        while (index != -1)
+        public static ParsingResult GetBetween(string text, char begin, char end, int offset = 0) 
         {
-            splited.Add(text.Substring(offset,index - offset));
-            offset = index + 1;
-            index = FindInWord(text, separator, offset);
+            int startIndex = FindInWord(text, begin, offset);
+            int endIndex = FindInWord(text, end, startIndex + 1);
+            int firstEndIndex = endIndex;
+
+
+            ParsingResult result = new ParsingResult();
+            result.Success = false;
+
+            if (startIndex < 0 || endIndex < 0)return result;
+
+            string potentialValue = text.Substring(startIndex, endIndex - startIndex + 1);
+
+            while(!(CountOf(potentialValue, begin) == CountOf(potentialValue, end) || endIndex < firstEndIndex))
+            {             
+                endIndex = FindInWord(text, end, endIndex + 1);
+                //Debug.Log(endIndex + " " + potentialValue);
+                potentialValue = text.Substring(startIndex, endIndex - startIndex + 1);
+            }
+
+            if(endIndex < firstEndIndex) return GetBetween(text, begin, end, startIndex + 1);
+
+            result.Value = potentialValue;
+            //Debug.Log("end : " + begin + " " + CountOf(result.Value,begin) + "," + end + " " + CountOf(result.Value,end));
+            result.StartIndex = startIndex;
+            result.EndIndex = endIndex + 1;
+            result.Success = true;
+            result.Groups.Add("Inside",text.Substring(startIndex + 1, endIndex - startIndex - 1));
+
+            return result;
         }
-
-        if (offset < text.Length) splited.Add(text.Substring(offset, text.Length - offset));
-        else if (offset == text.Length) splited.Add("");
-
-        return splited;
-    }
-
-    static public ParsingResult GetBetween(string text, char begin, char end, int offset = 0) 
-    {
-        int startIndex = FindInWord(text, begin, offset);
-        int endIndex = FindInWord(text, end, startIndex + 1);
-        int firstEndIndex = endIndex;
-
-
-        ParsingResult result = new ParsingResult();
-        result.succes = false;
-
-        if (startIndex < 0 || endIndex < 0)return result;
-
-        string potentialValue = text.Substring(startIndex, endIndex - startIndex + 1);
-
-        while(!(CountOf(potentialValue, begin) == CountOf(potentialValue, end) || endIndex < firstEndIndex))
-        {             
-            endIndex = FindInWord(text, end, endIndex + 1);
-            //Debug.Log(endIndex + " " + potentialValue);
-            potentialValue = text.Substring(startIndex, endIndex - startIndex + 1);
-        }
-
-        if(endIndex < firstEndIndex) return GetBetween(text, begin, end, startIndex + 1);
-
-        result.Value = potentialValue;
-        //Debug.Log("end : " + begin + " " + CountOf(result.Value,begin) + "," + end + " " + CountOf(result.Value,end));
-        result.startIndex = startIndex;
-        result.endIndex = endIndex + 1;
-        result.succes = true;
-        result.Groups.Add("Inside",text.Substring(startIndex + 1, endIndex - startIndex - 1));
-
-        return result;
-    }
 
     
-    static public ParsingResult GetCommande(string text, int offset = 0)
-    {
-        ParsingResult result = new ParsingResult();
-
-        ParsingResult macro = GetBetween(text, '(', ')', offset);
-        if (!macro.succes) return macro;
-        result.startIndex = macro.startIndex;
-        result.endIndex = macro.endIndex;
-        result.Groups.Add("commande", macro.Groups["Inside"]);
-        result.succes = true;
-
-        if (macro.endIndex + 1 < text.Length && text[macro.endIndex] == '[')
+        public static ParsingResult GetCommande(string text, int offset = 0)
         {
-            ParsingResult hook = GetBetween(text, '[', ']', macro.endIndex);
+            ParsingResult result = new ParsingResult();
 
-            if (hook.succes)
+            ParsingResult macro = GetBetween(text, '(', ')', offset);
+            if (!macro.Success) return macro;
+            result.StartIndex = macro.StartIndex;
+            result.EndIndex = macro.EndIndex;
+            result.Groups.Add("commande", macro.Groups["Inside"]);
+            result.Success = true;
+
+            if (macro.EndIndex + 1 < text.Length && text[macro.EndIndex] == '[')
             {
-                result.Groups.Add("text", hook.Groups["Inside"]);
-                result.endIndex = hook.endIndex;
+                ParsingResult hook = GetBetween(text, '[', ']', macro.EndIndex);
+
+                if (hook.Success)
+                {
+                    result.Groups.Add("text", hook.Groups["Inside"]);
+                    result.EndIndex = hook.EndIndex;
+                }
             }
+
+            result.Value = text.Substring(result.StartIndex, result.EndIndex - result.StartIndex);
+
+            return result ;
         }
 
-        result.Value = text.Substring(result.startIndex, result.endIndex - result.startIndex);
-
-        return result ;
-    }
-
-    static public List<ParsingResult> GetAllCommandes(string text, int offset = 0)
-    {
-        List<ParsingResult> result = new List<ParsingResult>();
-
-        ParsingResult match = GetCommande(text, offset);
-
-        while (match.succes) 
+        public static List<ParsingResult> GetAllCommandes(string text, int offset = 0)
         {
-            result.Add(match);
-            match = GetCommande(text,match.endIndex + 1);
+            List<ParsingResult> result = new List<ParsingResult>();
+
+            ParsingResult match = GetCommande(text, offset);
+
+            while (match.Success) 
+            {
+                result.Add(match);
+                match = GetCommande(text,match.EndIndex + 1);
+            }
+
+            return result ;
+
         }
 
-        return result ;
-
-    }
-
-    static public List<string> GetOpposit(string text, List<ParsingResult> complement)
-    {
-        List<string> result = new List<string>();
-
-        int start = 0;
-
-        foreach (ParsingResult complementItem in complement)
+        public static List<string> GetOpposit(string text, List<ParsingResult> complement)
         {
-            result.Add(text.Substring(start,complementItem.startIndex - start ));
-            start = complementItem.endIndex;
+            List<string> result = new List<string>();
+
+            int start = 0;
+
+            foreach (ParsingResult complementItem in complement)
+            {
+                result.Add(text.Substring(start,complementItem.StartIndex - start ));
+                start = complementItem.EndIndex;
+            }
+
+            if (start < text.Length) result.Add(text.Substring(start, text.Length - start));
+
+            return result ;
         }
 
-        if (start < text.Length) result.Add(text.Substring(start, text.Length - start));
-
-        return result ;
-    }
-
-    static public ParsingResult GetSet(string text, int offset = 0) 
-    {
-        ParsingResult result = new ParsingResult();
-
-        int variableNameStart = -1;
-        int variableNameEnd = -1;
-
-        for (int i = offset; i < text.Length; i++) 
+        public static ParsingResult GetSet(string text, int offset = 0) 
         {
-            if (text[i] == '$' && variableNameStart == -1) variableNameStart = i + 1;
-            else if (text[i] == ' ' && variableNameStart != -1 && variableNameEnd == -1) variableNameEnd = i;
-            else if (variableNameEnd != -1) break;
+            ParsingResult result = new ParsingResult();
+
+            int variableNameStart = -1;
+            int variableNameEnd = -1;
+
+            for (int i = offset; i < text.Length; i++) 
+            {
+                if (text[i] == '$' && variableNameStart == -1) variableNameStart = i + 1;
+                else if (text[i] == ' ' && variableNameStart != -1 && variableNameEnd == -1) variableNameEnd = i;
+                else if (variableNameEnd != -1) break;
+            }
+
+            if (variableNameStart == -1 || variableNameEnd == -1) return result ;
+
+            result.Groups.Add("variableName", text.Substring(variableNameStart, variableNameEnd - variableNameStart));
+
+            ParsingResult value = GetWord(text,variableNameEnd);
+            if (!value.Success) return result ;
+
+            result.Groups.Add("value", value.Groups["Inside"]);
+
+            result.Value = text;
+            result.Success = true ;
+            result.StartIndex = 0;
+            result.EndIndex = text.Length;
+
+            return result;
         }
 
-        if (variableNameStart == -1 || variableNameEnd == -1) return result ;
-
-        result.Groups.Add("variableName", text.Substring(variableNameStart, variableNameEnd - variableNameStart));
-
-        ParsingResult value = GetWord(text,variableNameEnd);
-        if (!value.succes) return result ;
-
-        result.Groups.Add("value", value.Groups["Inside"]);
-
-        result.Value = text;
-        result.succes = true ;
-        result.startIndex = 0;
-        result.endIndex = text.Length;
-
-        return result;
-    }
-
-    static public ParsingResult GetWord(string text, int offset = 0)
-    {
-        ParsingResult valueGuillemet = GetBetween(text, '"', '"', offset);
-        ParsingResult valueApostrophe = GetBetween(text, '\'', '\'', offset);
-
-        return valueGuillemet.succes ? valueGuillemet : valueApostrophe;
-    }
-
-
-    static public List<ParsingResult> GetAllWords(string text, int offset = 0)
-    {
-        List<ParsingResult> result = new List<ParsingResult>();
-
-        ParsingResult match = GetWord(text, offset);
-
-        while (match.succes)
+        public static ParsingResult GetWord(string text, int offset = 0)
         {
-            result.Add(match);
-            match = GetWord(text, match.endIndex + 1);
+            ParsingResult valueGuillemet = GetBetween(text, '"', '"', offset);
+            ParsingResult valueApostrophe = GetBetween(text, '\'', '\'', offset);
+
+            return valueGuillemet.Success ? valueGuillemet : valueApostrophe;
         }
 
-        return result;
+
+        public static List<ParsingResult> GetAllWords(string text, int offset = 0)
+        {
+            List<ParsingResult> result = new List<ParsingResult>();
+
+            ParsingResult match = GetWord(text, offset);
+
+            while (match.Success)
+            {
+                result.Add(match);
+                match = GetWord(text, match.EndIndex + 1);
+            }
+
+            return result;
+
+        }
+
+        public static int CountOf(string text, char c)
+        {
+            int retour = 0;
+            foreach (char ch in text) if (ch == c) retour++;
+            return retour;
+        }
 
     }
-
-    static public int CountOf(string text, char c)
-    {
-        int retour = 0;
-        foreach (char ch in text) if (ch == c) retour++;
-        return retour;
-    }
-
 }

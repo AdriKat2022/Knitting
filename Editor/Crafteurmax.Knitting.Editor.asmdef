@@ -1,0 +1,19 @@
+{
+    "name": "Crafteurmax.Knitting.Editor",
+    "rootNamespace": "Knitting",
+    "references": [
+        "GUID:b0a315ca5b823b245893bb33effd35da",
+        "GUID:a2457d88d40a0fd44a6079e086792e94"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

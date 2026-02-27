@@ -1,0 +1,16 @@
+{
+    "name": "Crafteurmax.Knitting.Runtime",
+    "rootNamespace": "Knitting",
+    "references": [
+        "GUID:a2457d88d40a0fd44a6079e086792e94"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,12 +1,15 @@
 {
-    "name": "Runtime",
-    "rootNamespace": "",
+    "name": "Crafteurmax.Knitting.Tests.Editor",
+    "rootNamespace": "Knitting.Tests",
     "references": [
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
-        "com.crafteurmax.knitting"
+        "GUID:27619889b8ba8c24980f49ee34dbb44a",
+        "GUID:0acc523941302664db1f4e527237feb3",
+        "GUID:b0a315ca5b823b245893bb33effd35da",
+        "GUID:a2457d88d40a0fd44a6079e086792e94"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
