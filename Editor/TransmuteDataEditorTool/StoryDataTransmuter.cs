@@ -8,6 +8,7 @@ using Knitting.Attributes;
 using Knitting.Types;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Events;
 using EditorUtility = Knitting.Utility.EditorUtility;
 
 namespace Knitting.TransmuteDataEditorTool
@@ -27,6 +28,8 @@ namespace Knitting.TransmuteDataEditorTool
     
         public bool MakeStoryDataScriptableObject = true;
         [ShowIf(nameof(MakeStoryDataScriptableObject))]
+        public string StoryDataName = "STORY_DATA";
+        [ShowIf(nameof(MakeStoryDataScriptableObject))]
         [Tooltip("The new type that will be used to hold the global story data.")]
         public ScriptableObjectTypeReference StoryDataNewType;
         
@@ -44,8 +47,13 @@ namespace Knitting.TransmuteDataEditorTool
 
         [Header("Input")]
         public TextAsset TwineTextFile;
-    
+
+        [Header("Pipeline")]
+        [Tooltip("Event that will fire once the transmutation is finished.")]
+        public UnityEvent<ScriptableObject[]> OnTransmutationComplete;
+        
         private Dictionary<string, ScriptableObjectData> allScriptableObjects;
+        private ScriptableObject[] readyScriptableObjectList;
         private List<FieldAttribute> StoryFieldAttributes;
         private List<FieldAttribute> StoryNodeFieldAttributes;
         private List<MethodAttribute> StoryNodeMethodAttributes;
@@ -56,9 +64,13 @@ namespace Knitting.TransmuteDataEditorTool
         public void Transmute()
         {
             allScriptableObjects = new();
+            readyScriptableObjectList = null;
+            
             StoryFieldAttributes = new();
             StoryNodeMethodAttributes = new();
             StoryNodeFieldAttributes = new();
+
+            AvailableChoiceCustomType = null;
         
             // Using the story as a plain C# class (it's fine since we do not intent to use any Unity functionality)
             Story story = new Story();
@@ -66,32 +78,57 @@ namespace Knitting.TransmuteDataEditorTool
 
             if (MakeStoryDataScriptableObject)
             {
-                MakeAndSaveStoryDataScriptableObject(story);
+                Debug.Log("Saving Story as ScriptableObjects...");
+                var storyScriptableObject = MakeAndSaveStoryDataScriptableObject(story);
+                Debug.Log("Saved Story.", storyScriptableObject);
             }
-            
-            MakeToScriptableObjects(story, allScriptableObjects);
 
-            if (SaveChoicesAsReferences)
+            if (MakeStoryDataNodeScriptableObjects)
             {
-                LinkScriptableObjects(story, allScriptableObjects);
+                MakeStoryNodeScriptableObjects(story, allScriptableObjects);
+                
+                if (SaveChoicesAsReferences)
+                {
+                    LinkScriptableObjects(allScriptableObjects, readyScriptableObjectList);
+                }
+                
+                Debug.Log("Saving StoryNodes as ScriptableObjects...");
+                
+                SaveScriptableObjectsAndTriggerPostDataHook(allScriptableObjects);
+                
+                Debug.Log("Triggered PostTransmute event.");
+                
+                Debug.Log("Triggering OnTransmutationComplete event.");
+                
+                try
+                {
+                    OnTransmutationComplete.Invoke(readyScriptableObjectList);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Exception occured during OnTransmutationComplete Event: {e.Message}");
+                }
             }
-
-            SaveScriptableObjects(allScriptableObjects);
         }
 
-        private void MakeAndSaveStoryDataScriptableObject(Story story)
+        private ScriptableObject MakeAndSaveStoryDataScriptableObject(Story story)
         {
-            ScriptableObject scriptableObject = CreateInstance(StoryDataNewType.Type);
+            ScriptableObject storyScriptableObject = CreateInstance(StoryDataNewType.Type);
             
-            MakeFieldInfosCache(scriptableObject, StoryFieldAttributes, ref AvailableChoiceCustomType);
+            MakeFieldInfosCache(storyScriptableObject, StoryFieldAttributes, ref AvailableChoiceCustomType);
             
             foreach (var storyFieldAttribute in StoryFieldAttributes)
             {
-                storyFieldAttribute.FieldInfo.SetValue(scriptableObject, GetValueFromStory(story, storyFieldAttribute.TransmuteFromAttribute.StoryData));
+                storyFieldAttribute.FieldInfo.SetValue(storyScriptableObject, GetValueFromStory(story, storyFieldAttribute.TransmuteFromAttribute.StoryData));
             }
+            
+            AssetDatabase.CreateAsset(storyScriptableObject, $"{FolderPathToSaveTransmutation}/{StoryDataName}.asset");
+            AssetDatabase.SaveAssets();
+
+            return storyScriptableObject;
         }
         
-        private void MakeToScriptableObjects(Story story, Dictionary<string, ScriptableObjectData> scriptableObjectDatas)
+        private void MakeStoryNodeScriptableObjects(Story story, Dictionary<string, ScriptableObjectData> scriptableObjectDatas)
         {
             List<StoryNode> storyNodesleft = new();
         
@@ -147,19 +184,22 @@ namespace Knitting.TransmuteDataEditorTool
             }
         }
 
-        private void LinkScriptableObjects(Story story, Dictionary<string, ScriptableObjectData> scriptableObjectDatas)
+        private void LinkScriptableObjects(Dictionary<string, ScriptableObjectData> scriptableObjectDatas, ScriptableObject[] scriptableObjects)
         {
+            scriptableObjects = new ScriptableObject[scriptableObjectDatas.Count];
+
+            int i = 0;
             foreach ((string _, ScriptableObjectData scriptableObjectData) in scriptableObjectDatas)
             {
                 ReferenceChoiceData[] refChoices = scriptableObjectData.Next.Select(data => new ReferenceChoiceData(allScriptableObjects[data.nodeTitle].Node, data.display)).ToArray();
                 InsertChoice(scriptableObjectData.Node, refChoices);
+                scriptableObjects[i] = scriptableObjectData.Node;
+                i++;
             }
         }
 
-        private void SaveScriptableObjects(Dictionary<string, ScriptableObjectData> scriptableObjectDatas)
+        private void SaveScriptableObjectsAndTriggerPostDataHook(Dictionary<string, ScriptableObjectData> scriptableObjectDatas)
         {
-            Debug.Log($"Saving StoryNodes as ScriptableObjects...");
-            
             EditorUtility.CreateFoldersRecursively(FolderPathToSaveTransmutation);
 
             foreach ((string _, ScriptableObjectData scriptableObject) in scriptableObjectDatas)
@@ -168,8 +208,6 @@ namespace Knitting.TransmuteDataEditorTool
                 
                 TriggerPostDataAttribute(scriptableObject.Node);
             }
-            
-            Debug.Log("Triggered PostTransmute event.");
         }
 
         private void InsertChoice(ScriptableObject scriptableObject, ReferenceChoiceData[] refChoices)
@@ -271,17 +309,15 @@ namespace Knitting.TransmuteDataEditorTool
                 {
                     methodInfo.Invoke(scriptableObject, Array.Empty<object>());
                 }
-                // else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(StoryNode))
-                // {
-                //     methodInfo.Invoke(newStoryNode, new object[] { currentStoryNode });
-                // }
                 else
                 {
                     Debug.LogWarning($"{nameof(PostTransmuteAttribute)}: {methodInfo.Name} can only be called if it has no parameter.");
                 }
             }
         }
-
+        
+        #region Helpers
+        
         private static object GetValueFromStory(Story story, StoryData storyData)
         {
             return storyData switch
@@ -358,6 +394,9 @@ namespace Knitting.TransmuteDataEditorTool
             }
         }
     
+        #endregion
+        
+        #region Structs
         private struct FieldAttribute
         {
             public FieldInfo FieldInfo;
@@ -411,5 +450,7 @@ namespace Knitting.TransmuteDataEditorTool
             public ScriptableObject Node;
             public List<ChoiceData> Next;
         }
+        
+        #endregion
     }
 }
