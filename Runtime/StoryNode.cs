@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
+using Knitting.Interfaces;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -22,21 +22,21 @@ namespace Knitting
 
     [Serializable]
     public class VariableUpdate
+    {
+        public string VariableName;
+        public string VariableValue;
+
+        public VariableUpdate(string variableName, string variableValue)
         {
-            public string VariableName;
-            public string VariableValue;
-
-            public VariableUpdate(string variableName, string variableValue)
-            {
-                VariableName = variableName;
-                VariableValue = variableValue;
-            }
-
-            public void ApplyChangeToContext(Dictionary<string, string> varContext)
-            {
-                varContext[VariableName] = VariableValue;
-            }
+            VariableName = variableName;
+            VariableValue = variableValue;
         }
+
+        public void ApplyChangeToContext(IVariableContext varContext)
+        {
+            varContext[VariableName] = VariableValue;
+        }
+    }
 
     [Serializable]
     public class StoryNode
@@ -66,6 +66,7 @@ namespace Knitting
         #endregion
         
         private Story ParentStory;
+        private IVariableContext VariableContext;
         private string Title = string.Empty;
         private string RawText = string.Empty;
         private List<string> Tags = new();
@@ -80,11 +81,12 @@ namespace Knitting
         
         #region Setup/Constructor
         
-        public StoryNode(string _title, string _nodeData, Story _parentStrory)
+        public StoryNode(string _title, string _nodeData, Story _parentStory)
         {
             ParseTitle(_title);
             ParseNodeData(_nodeData);
-            ParentStory = _parentStrory;
+            ParentStory = _parentStory;
+            VariableContext = _parentStory.GetVarContext();
         }
 
         public StoryNode(string _title, List<string> _tags, Vector2Int _position, Vector2Int _size, string _data, Story _parentStrory)
@@ -224,7 +226,7 @@ namespace Knitting
             DynamicData = ParseText(RawText, ParentStory.GetVarContext());
         }
         
-        public static TextParsingData ParseText(string textToParse, Dictionary<string, string> varsContext)
+        public static TextParsingData ParseText(string textToParse, IVariableContext varsContext)
         {
             TextParsingData existingData = new();
             
@@ -261,6 +263,7 @@ namespace Knitting
                         string name = variableMatch.Groups["variableName"];
                         string value = variableMatch.Groups["value"];
                         existingData.VariableUpdates.Add(new(name, value));
+                        varsContext[name] = value;
                         break;
 
                     case COMMAND_TYPE.IF:
@@ -380,7 +383,7 @@ namespace Knitting
             return COMMAND_TYPE.DEFAULT;
         }
 
-        private static bool TestCondition(string condition, Dictionary<string, string> varsContext)
+        private static bool TestCondition(string condition, IVariableContext varsContext)
         {
             // replace variable by real value
             condition = ReplaceVariablesByValues(condition, "'", varsContext);
@@ -469,7 +472,7 @@ namespace Knitting
             return false;
         }
 
-        private static string ReplaceVariablesByValues(string text, string delimiter, Dictionary<string, string> varsContext)
+        private static string ReplaceVariablesByValues(string text, string delimiter, IVariableContext varsContext)
         {
             Regex RGX_FindVariable = new Regex(@"\$\D[^\s,]*");
 

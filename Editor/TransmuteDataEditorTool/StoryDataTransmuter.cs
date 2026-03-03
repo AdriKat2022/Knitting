@@ -89,7 +89,7 @@ namespace Knitting.TransmuteDataEditorTool
                 
                 if (SaveChoicesAsReferences)
                 {
-                    LinkScriptableObjects(allScriptableObjects, readyScriptableObjectList);
+                    LinkScriptableObjects(allScriptableObjects, ref readyScriptableObjectList);
                 }
                 
                 Debug.Log("Saving StoryNodes as ScriptableObjects...");
@@ -104,9 +104,10 @@ namespace Knitting.TransmuteDataEditorTool
                 {
                     OnTransmutationComplete.Invoke(readyScriptableObjectList);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
-                    Debug.LogError($"Exception occured during OnTransmutationComplete Event: {e.Message}");
+                    Debug.LogError($"Exception occured during OnTransmutationComplete Event");
+                    throw;
                 }
             }
         }
@@ -184,7 +185,7 @@ namespace Knitting.TransmuteDataEditorTool
             }
         }
 
-        private void LinkScriptableObjects(Dictionary<string, ScriptableObjectData> scriptableObjectDatas, ScriptableObject[] scriptableObjects)
+        private void LinkScriptableObjects(Dictionary<string, ScriptableObjectData> scriptableObjectDatas, ref ScriptableObject[] scriptableObjects)
         {
             scriptableObjects = new ScriptableObject[scriptableObjectDatas.Count];
 

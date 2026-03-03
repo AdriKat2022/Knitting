@@ -1,12 +1,22 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using AdriKat.Toolkit.Attributes;
+using Knitting.Interfaces;
 using UnityEngine;
 
 namespace Knitting
 {
     public class Story : MonoBehaviour
     {
+        private const string SCRIPTABLE_OBJECT_INTERFACE_MISSING_WARNING =
+            "The ScriptableObject must implement the IVariableContextReceiver interface to function properly.";
+        
         public TextAsset twineText;
+        public bool UseSeparateObjectForVariableContext;
+        [ShowIf(nameof(UseSeparateObjectForVariableContext), showDisabledField: true)]
+        [WarnIf(nameof(IsScriptableObjectVariableContextInvalid), SCRIPTABLE_OBJECT_INTERFACE_MISSING_WARNING, showAfter: true)]
+        public ScriptableObject ScriptableObjectVariableContext;
+        private IVariableContext _variableContext;
         
         [SerializeField]
         private bool printVariableWhenSet;
@@ -42,25 +52,31 @@ namespace Knitting
         [SerializeField] private bool usePath;
         [SerializeField] private string path;
         [SerializeField] private List<DescribedSprite> sprites = new();
-
-
-        // Debug 
-        // public int index;
-
-        // Start is called before the first frame update
-        private void Awake()
+        
+        public void Awake()
         {
             if (usePath) twineText = Resources.Load(path) as TextAsset;
 
             if (!twineText)
             {
-                Debug.LogWarning("No twine file");
-                return;
+                Debug.LogWarning("No twine file.");
             }
+
             SetUpStory(twineText.text);
+
+            if (IsScriptableObjectVariableContextInvalid())
+            {
+                Debug.LogWarning("Variable context is invalid! Switched to using a default variable context without a scriptable object.");
+                UseSeparateObjectForVariableContext = false;
+            }
+            
+            if (UseSeparateObjectForVariableContext)
+            {
+                _variableContext.Initialize();
+            }
         }
 
-        // ########## Setup ########## 
+        // ########## Setup ##########
 
         public void SetUpStory(string text)
         {
@@ -148,13 +164,18 @@ namespace Knitting
 
         // ########## node variable ########## 
 
-        public Dictionary<string, string> GetVarContext()
+        public IVariableContext GetVarContext()
         {
-            return nodeVariables;
+            return _variableContext ?? new DictionaryVariableContext(nodeVariables);
         }
         
         public string GetVariable(string variableName)
         {
+            if (UseSeparateObjectForVariableContext && _variableContext != null)
+            {
+                return _variableContext[variableName];
+            }
+            
             bool isSet = nodeVariables.TryGetValue(variableName, out string returnValue);
             //Assert.IsTrue(isSet, variableName + " is not defined");
             return returnValue;
@@ -163,6 +184,13 @@ namespace Knitting
         public void SetVariable(string variableName, string value)
         {
             if(printVariableWhenSet) Debug.Log("set " + variableName + " to " + value);
+
+            if (UseSeparateObjectForVariableContext && _variableContext != null)
+            {
+                _variableContext[variableName] = value;
+                return;
+            }
+            
             nodeVariables[variableName] = value;
         }
 
@@ -217,6 +245,41 @@ namespace Knitting
             return null;
         }
 
+        public bool IsScriptableObjectVariableContextInvalid()
+        {
+            if (!UseSeparateObjectForVariableContext) return false;
+            
+            _variableContext = ScriptableObjectVariableContext as IVariableContext;
+            
+            return _variableContext == null;
+        }
+
+        public class DictionaryVariableContext : IVariableContext
+        {
+            private readonly Dictionary<string, string> _variables = new();
+            
+            public DictionaryVariableContext() { }
+            
+            public DictionaryVariableContext(Dictionary<string, string> variableContext)
+            {
+                _variables = variableContext;
+            }
+            
+            public void Initialize()
+            { } // No need for initialization.
+
+            public bool Contains(string variableName)
+            {
+                return _variables.ContainsKey(variableName);
+            }
+
+            public string this[string variableName]
+            {
+                get => _variables[variableName];
+                set => _variables[variableName] = value;
+            }
+        }
+        
         // ########## Debug ########## 
         /*
     [ContextMenu("nextNode")]
